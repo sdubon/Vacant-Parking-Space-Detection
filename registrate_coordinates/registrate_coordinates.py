@@ -2,7 +2,7 @@
 import numpy as np
 import cv2
 import argparse
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 # initialize the list of reference points and its respective counter
 refPt = []	        # temporarily stores the coordinates of the vertices of each polygon drawn by the user 
@@ -26,6 +26,7 @@ def get_polygon_coordinates(event, x, y, flags, param):
 
 samples_a = []
 samples_b = []
+samples_f = []
 labels = []
 
 def extract_roi():
@@ -41,13 +42,14 @@ def extract_roi():
     if key == ord("s"):                                                 # if the user wants to save it
         print("Saving parking spot...")
 
-        print("Press 'e' if parking spot is empty, press 'o' if parking spor is occupied") 
-        key = cv2.waitKey(0)
+        while (key!=ord("e") and key!=ord("o")):
+            print("Press 'e' if parking spot is empty, press 'o' if parking spot is occupied") 
+            key = cv2.waitKey(0)
 
-        if key == ord("e"):
-            labels.append(0)
-        elif key == ord("o"):
-            labels.append(1)
+            if key == ord("e"):
+                labels.append(0)
+            elif key == ord("o"):
+                labels.append(1)
         
         cv2.polylines(image,[roi_corners],True,(0,0,255))               # draw blue polygon around the parking spot
         cv2.imshow("image", image)
@@ -71,15 +73,15 @@ def extract_roi():
         ignore_mask_color = 255                                         # 
         cv2.fillPoly(mask_1D, roi_corners, ignore_mask_color)  
         Lab_roi = cv2.cvtColor(roi, cv2.COLOR_RGB2LAB)
-
+        
         hist_a = cv2.calcHist([Lab_roi],[1],mask_1D,[32],[0,255])
         hist_b = cv2.calcHist([Lab_roi],[2],mask_1D,[32],[0,255])
         
-        plt.plot(hist_a,color = 'r')
-        plt.plot(hist_b,color = 'b')
-        plt.xlim([0,32])
-        plt.show()
-        color = ('r','b')                                               # ploting histograms
+##        plt.plot(hist_a,color = 'r')
+##        plt.plot(hist_b,color = 'b')
+##        plt.xlim([0,32])
+##        plt.show()
+##        color = ('r','b')                                               # ploting histograms just for testing
 
         hist_a = hist_a.flatten()
         hist_b = hist_b.flatten()
@@ -87,7 +89,15 @@ def extract_roi():
         samples_a.append(hist_a)
         samples_b.append(hist_b)
        
-        masked_roi = cv2.bitwise_and(roi, mask)                         # apply the mask
+        masked_roi = cv2.bitwise_and(roi, mask)                         # apply the mask to implement fast algorithm
+        gaussian_roi = cv2.GaussianBlur(masked_roi,(5,5),0)             # apply a gaussian filter to reduce noise
+        fast = cv2.FastFeatureDetector_create()                         # initialize fast detector
+        kp = fast.detect(gaussian_roi, None)                            # implement fast	
+
+        temp_img = cv2.drawKeypoints(gaussian_roi, kp, None, color=(0,255,0))   #storing image just for testing proposes
+        cv2.imwrite('fast_imgPI.jpg',temp_img)
+        
+        samples_f.append(len(kp))                                       
         
         creating_spot = False
         cnt_refPt = 0                                                   # reinitialize reference points
@@ -134,16 +144,24 @@ while True:
     # from the image and display it
     elif cnt_refPt == 4:
         roi = extract_roi()
-        if len(roi) != 1:
-            cv2.imshow("roi", roi)
+##        if len(roi) != 1:
+##            cv2.imshow("roi", roi)
             #lab_histogram(roi)
             
     # if the 'escape' key is pressed, break from the loop
     elif key == 27:
         break
 
-print np.float32(labels)
-print np.float32(samples_a)
-print np.float32(samples_b)
+##print np.float32(labels)
+##print np.float32(samples_a)
+##print np.float32(samples_b)
+##print np.float32(samples_f)
+
 # close all open windows
 cv2.destroyAllWindows()
+
+outfile = raw_input("Enter a filename: ")
+outfile = outfile + ".npz"
+np.savez(outfile, labels=labels, samples_a=samples_a, samples_b=samples_b, samples_f=samples_f)
+
+
